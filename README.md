@@ -501,3 +501,6 @@ Anchor currently uses durable RabbitMQ queues and persistent database/vector-sto
 * Worker job leases/timeouts
 * Database and external API retry policies
 * Failure recovery/reconciliation jobs
+
+## Demo
+* [Click here for the demo video](https://youtu.be/wcjX58F6uBM)
