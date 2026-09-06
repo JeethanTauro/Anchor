@@ -21,6 +21,12 @@ services:
 
     restart: unless-stopped
 
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 
   # =====================================================
   # RabbitMQ
@@ -79,12 +85,9 @@ services:
 
     command:
       [
-        "uvicorn",
-        "app.main:app",
-        "--host",
-        "0.0.0.0",
-        "--port",
-        "8000"
+        "sh",
+        "-c",
+        "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
       ]
 
     ports:
@@ -103,7 +106,7 @@ services:
 
     depends_on:
       postgres:
-        condition: service_started
+        condition: service_healthy
 
       rabbitmq:
         condition: service_healthy
@@ -144,7 +147,7 @@ services:
 
     depends_on:
       postgres:
-        condition: service_started
+        condition: service_healthy
 
       rabbitmq:
         condition: service_healthy
@@ -182,7 +185,7 @@ services:
 
     depends_on:
       postgres:
-        condition: service_started
+        condition: service_healthy
 
       rabbitmq:
         condition: service_healthy
