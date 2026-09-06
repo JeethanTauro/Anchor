@@ -8,11 +8,16 @@ from alembic import context
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
-from app.config import settings
+import os
+
+database_url = os.getenv("DATABASE_URL")
+
+if not database_url:
+    raise RuntimeError("DATABASE_URL environment variable is required")
 
 config.set_main_option(
     "sqlalchemy.url",
-    settings.database_url
+    database_url
 )
 
 # Interpret the config file for Python logging.
