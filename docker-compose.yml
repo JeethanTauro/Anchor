@@ -1,0 +1,203 @@
+services:
+
+  # =====================================================
+  # PostgreSQL
+  # =====================================================
+
+  postgres:
+    image: postgres:16
+    container_name: anchor-postgres
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    restart: unless-stopped
+
+
+  # =====================================================
+  # RabbitMQ
+  # =====================================================
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: anchor-rabbitmq
+
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+
+  # =====================================================
+  # ChromaDB
+  # =====================================================
+
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: anchor-chromadb
+
+    ports:
+      - "8001:8000"
+
+    volumes:
+      - chroma_data:/data
+
+    restart: unless-stopped
+
+
+  # =====================================================
+  # Analysis API
+  # =====================================================
+
+  analysis-api:
+    build:
+      context: ./analysis-service
+
+    container_name: anchor-analysis-api
+
+    command:
+      [
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000"
+      ]
+
+    ports:
+      - "8000:8000"
+
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+
+      CHROMA_HOST: ${CHROMA_HOST}
+      CHROMA_PORT: ${CHROMA_PORT}
+
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GROQ_MODEL: ${GROQ_MODEL}
+
+    depends_on:
+      postgres:
+        condition: service_started
+
+      rabbitmq:
+        condition: service_healthy
+
+      chromadb:
+        condition: service_started
+
+    restart: unless-stopped
+
+
+  # =====================================================
+  # Analysis Consumer
+  # =====================================================
+
+  analysis-consumer:
+    build:
+      context: ./analysis-service
+
+    container_name: anchor-analysis-consumer
+
+    command:
+      [
+        "python",
+        "-m",
+        "consumer.main"
+      ]
+
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+
+      CHROMA_HOST: ${CHROMA_HOST}
+      CHROMA_PORT: ${CHROMA_PORT}
+
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GROQ_MODEL: ${GROQ_MODEL}
+
+    depends_on:
+      postgres:
+        condition: service_started
+
+      rabbitmq:
+        condition: service_healthy
+
+      chromadb:
+        condition: service_started
+
+    restart: unless-stopped
+
+
+  # =====================================================
+  # Indexing Worker
+  # =====================================================
+
+  indexing-worker:
+    build:
+      context: ./indexing-worker
+
+    container_name: anchor-indexing-worker
+
+    command:
+      [
+        "python",
+        "-m",
+        "app.main"
+      ]
+
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+
+      CHROMA_HOST: ${CHROMA_HOST}
+      CHROMA_PORT: ${CHROMA_PORT}
+
+    depends_on:
+      postgres:
+        condition: service_started
+
+      rabbitmq:
+        condition: service_healthy
+
+      chromadb:
+        condition: service_started
+
+    restart: unless-stopped
+
+
+# =======================================================
+# Persistent Volumes
+# =======================================================
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+  chroma_data:
